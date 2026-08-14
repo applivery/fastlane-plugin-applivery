@@ -9,10 +9,10 @@ work.
 They exist because both bugs fixed in 2.5.0 only appear in specific
 combinations:
 
-- [#18](https://github.com/fastlane-community/fastlane-plugin-applivery/issues/18):
+- [#20](https://github.com/fastlane-community/fastlane-plugin-applivery/issues/20):
   `uninitialized constant Faraday::UploadIO` with fastlane 2.238.0, the first
   release on faraday 2.
-- [#17](https://github.com/fastlane-community/fastlane-plugin-applivery/issues/17):
+- [#18](https://github.com/fastlane-community/fastlane-plugin-applivery/issues/18):
   `fatal:` lines printed by git in repositories without tags.
 
 ## Requirements
@@ -56,7 +56,7 @@ identical combination. fastlane's ruby floor moved to `>= 2.7` in 2.232.0 and to
 
 | row | ruby | fastlane | faraday | suite | why |
 |---|---|---|---|---|---|
-| `latest` | 3.4 | 2.238.0 | 2.x newest | core + full | newest of everything, the configuration from #18 |
+| `latest` | 3.4 | 2.238.0 | 2.x newest | core + full | newest of everything, the configuration from #20 |
 | `faraday2-min` | 3.0 | 2.238.0 | 2.7.x | core | lowest ruby for faraday 2, oldest faraday 2 accepted |
 | `faraday1-last` | 3.0 | 2.237.0 | 1.10.x | core | last fastlane on faraday 1 |
 | `ruby27` | 2.7 | 2.234.0 | 1.9.x | core | last fastlane supporting ruby 2.7, older faraday 1 line |
@@ -80,7 +80,7 @@ warning rather than breaking the run.
 | `action_docs` | core | no | the action and every option load on this stack |
 | `unit_specs` | core | no | the whole unit suite passes against this row's faraday |
 | `minimal_tagged` | core | yes | upload from a tagged repo, with branch/commit/tag/remote attached |
-| `untagged_quiet` | core | yes | upload from a repo with no tags and **no `fatal:` output** (#17) |
+| `untagged_quiet` | core | yes | upload from a repo with no tags and **no `fatal:` output** (#18) |
 | `bad_token` | core | no | an invalid token is reported as such |
 | `missing_build` | core | no | a wrong path fails before any request is sent |
 | `all_params` | full | yes | every option at once, emoji/newlines in the changelog, arguments winning over env vars |

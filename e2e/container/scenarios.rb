@@ -31,8 +31,8 @@ REMOTE = 'git@github.com:applivery/e2e-example.git'.freeze
 SPACED_BUILD = '/builds/with space.apk'.freeze
 
 # Output that must never appear, whatever the scenario does:
-#   fatal:                  git leaking to the console (issue #17)
-#   uninitialized constant  a missing constant, e.g. Faraday::UploadIO (issue #18)
+#   fatal:                  git leaking to the console (issue #18)
+#   uninitialized constant  a missing constant, e.g. Faraday::UploadIO (issue #20)
 # Note `UploadIO` on its own is NOT forbidden: Faraday::Multipart::FilePart is an
 # alias of Multipart::Post::UploadIO, so the verbose request body prints it.
 FORBIDDEN = ['fatal:', 'uninitialized constant', 'NameError', 'undefined method'].freeze
@@ -183,7 +183,7 @@ def scenarios(head_short)
       'suite' => 'core',
       'workspace' => 'untagged',
       'uploads' => true,
-      'why' => 'a repository without tags must upload without printing git errors (issue #17)',
+      'why' => 'a repository without tags must upload without printing git errors (issue #18)',
       'cmd' => %w[bundle exec fastlane android minimal --verbose],
       'expect' => 'success',
       'includes' => upload_ok + [body_string('tag', ''), body_string('branch', BRANCH)]

@@ -6,11 +6,11 @@ All notable changes to this plugin are documented in this file.
 
 ### Fixed
 
-- **Compatibility with fastlane 2.238 and Faraday 2** ([#18](https://github.com/fastlane-community/fastlane-plugin-applivery/issues/18)). The
+- **Compatibility with fastlane 2.238 and Faraday 2** ([#20](https://github.com/fastlane-community/fastlane-plugin-applivery/issues/20)). The
   upload crashed with `uninitialized constant Faraday::UploadIO (NameError)`, because Faraday 2 moved
   multipart support to the `faraday-multipart` gem. The plugin now works with Faraday 1 and Faraday 2, and
   no longer depends on the unmaintained `faraday_middleware` gem (`FaradayMiddleware::ParseJson`).
-- **No more `fatal:` lines in the console** ([#17](https://github.com/fastlane-community/fastlane-plugin-applivery/issues/17)). Repositories
+- **No more `fatal:` lines in the console** ([#18](https://github.com/fastlane-community/fastlane-plugin-applivery/issues/18)). Repositories
   without tags (or folders that are not a repository at all) made git print
   `fatal: No names found, cannot describe anything.` and
   `fatal: empty string is not a valid pathspec...`, which looked like the upload had failed. Git commands

@@ -87,7 +87,7 @@ describe Fastlane::Helper::AppliveryHelper do
     end
 
     # Faraday 1 and Faraday 2 provide the multipart classes under different
-    # names, all of them are supported (see issue #18).
+    # names, all of them are supported (see issue #20).
     it 'uses Faraday::Multipart::FilePart when available' do
       skip("Faraday::Multipart is not available") unless defined?(Faraday::Multipart::FilePart)
       expect(helper.file_part(build_path)).to be_kind_of(Faraday::Multipart::FilePart)
@@ -205,7 +205,7 @@ describe Fastlane::Helper::AppliveryHelper do
       end
     end
 
-    # https://github.com/fastlane-community/fastlane-plugin-applivery/issues/17
+    # https://github.com/fastlane-community/fastlane-plugin-applivery/issues/18
     it 'does not print anything when the repository has no tags' do
       in_git_repo do
         output = capture_stderr do

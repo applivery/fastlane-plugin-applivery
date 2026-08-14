@@ -2,94 +2,126 @@ require 'faraday'
 
 module Fastlane
   module Actions
-
     module SharedValues
       APPLIVERY_BUILD_ID = :APPLIVERY_BUILD_ID
     end
 
     class AppliveryAction < Action
+      UPLOAD_PATH = "/v1/integrations/builds".freeze
+
+      # Default timeout for the whole upload request. Big builds on a slow
+      # network need way more than the 60 seconds Net::HTTP defaults to.
+      DEFAULT_TIMEOUT = 600
 
       def self.run(params)
-        build_path = params[:build_path]
-        build = Faraday::UploadIO.new(build_path, 'application/octet-stream') if build_path && File.exist?(build_path)
+        build_path = validated_build_path(params[:build_path])
+        request_body = build_request_body(params, build_path)
+        connection = Helper::AppliveryHelper.upload_connection(params[:tenant], params[:timeout])
 
-        base_domain = Helper::AppliveryHelper.get_base_domain(params[:tenant])
-        upload_api_url = "https://upload.#{base_domain}"
+        UI.message("Uploading to Applivery... 🛫")
+        response = upload(connection, request_body, params)
 
-        conn = Faraday.new(url: upload_api_url) do |faraday|
-          faraday.request :multipart
-          faraday.request :url_encoded
-          # faraday.response :logger
-          faraday.use FaradayMiddleware::ParseJson
-          faraday.adapter :net_http
-        end
+        handle_response(response)
+      end
 
-        response = conn.post do |req|
-          req.url '/v1/integrations/builds'
+      def self.upload(connection, request_body, params)
+        connection.post do |req|
+          req.url(UPLOAD_PATH)
           req.headers['Content-Type'] = 'multipart/form-data'
           req.headers['Accept'] = 'application/json'
           req.headers['Authorization'] = "bearer #{params[:app_token]}"
-          request_body = {
-            changelog: params[:changelog],
-            notifyCollaborators: params[:notify_collaborators],
-            notifyEmployees: params[:notify_employees],
-            notifyMessage: params[:notify_message],
-            filter: params[:filter],
-            build: build,
-            deployer: {
-              name: "fastlane",
-              info: {
-                buildNumber: Helper::AppliveryHelper.get_integration_number,
-                branch: Helper::AppliveryHelper.git_branch,
-                commit: Helper::AppliveryHelper.git_commit,
-                commitMessage: Helper::AppliveryHelper.git_message,
-                repositoryUrl: Helper::AppliveryHelper.add_git_remote,
-                tag: Helper::AppliveryHelper.git_tag,
-                triggerTimestamp: Time.now.getutc.to_i
-              } 
-            }
-          }
-          request_body[:versionName] = params[:name] if !params[:name].nil?
-          request_body[:tags] = params[:tags] if !params[:tags].nil?
-
           req.body = request_body
-          UI.message "Uploading to Applivery... 🛫"
           UI.verbose("Request Body: #{req.body}")
         end
-        UI.verbose "Response Body: #{response.body}"
-        status = response.body["status"]
-        if status
-          UI.success "Build uploaded successfully! 💪"
-          Actions.lane_context[SharedValues::APPLIVERY_BUILD_ID] = response.body["data"]["id"]
-        else
-          UI.error "Oops! Something went wrong.... 🔥"
-          error = response.body["error"]
-          Helper::AppliveryHelper.parse_error(error)
-        end
-
+      rescue Faraday::TimeoutError
+        UI.user_error!("Timed out while uploading the build to Applivery. You can increase the `timeout` option (currently #{params[:timeout] || DEFAULT_TIMEOUT} seconds) and try again")
+      rescue Faraday::ConnectionFailed => e
+        UI.user_error!("Could not connect to Applivery: #{e.message}. Please check your network connection#{params[:tenant] ? " and the `tenant` option (#{params[:tenant]})" : ''}")
       end
 
+      def self.handle_response(response)
+        body = Helper::AppliveryHelper.parse_response_body(response)
+        UI.verbose("Response Body: #{body}")
+
+        if body["status"]
+          UI.success("Build uploaded successfully! 💪")
+          build_id = (body["data"] || {})["id"]
+          Actions.lane_context[SharedValues::APPLIVERY_BUILD_ID] = build_id
+          return build_id
+        else
+          UI.error("Oops! Something went wrong.... 🔥")
+          Helper::AppliveryHelper.parse_error(body["error"], response.status)
+        end
+      end
+
+      # Fails early with an actionable message instead of uploading an empty
+      # request and letting the API reject it.
+      def self.validated_build_path(build_path)
+        build_path = build_path.to_s.strip
+        if build_path.empty?
+          UI.user_error!("No build to upload. Please set the `build_path` option (or the APPLIVERY_BUILD_PATH environment variable) with the path to your IPA, APK or AAB file")
+        end
+        unless File.file?(build_path)
+          UI.user_error!("Build not found at '#{build_path}'. Please double-check the `build_path` option")
+        end
+
+        return build_path
+      end
+
+      def self.build_request_body(params, build_path)
+        request_body = {
+          changelog: params[:changelog],
+          notifyCollaborators: params[:notify_collaborators],
+          notifyEmployees: params[:notify_employees],
+          notifyMessage: params[:notify_message],
+          filter: params[:filter],
+          build: Helper::AppliveryHelper.file_part(build_path),
+          deployer: {
+            name: "fastlane",
+            info: {
+              buildNumber: Helper::AppliveryHelper.get_integration_number,
+              branch: Helper::AppliveryHelper.git_branch,
+              commit: Helper::AppliveryHelper.git_commit,
+              commitMessage: Helper::AppliveryHelper.git_message,
+              repositoryUrl: Helper::AppliveryHelper.add_git_remote,
+              tag: Helper::AppliveryHelper.git_tag,
+              triggerTimestamp: Time.now.getutc.to_i
+            }
+          }
+        }
+        request_body[:versionName] = params[:name] unless params[:name].nil?
+        request_body[:tags] = params[:tags] unless params[:tags].nil?
+
+        return request_body
+      end
+
+      # Build generated by the previous step of the lane, if any.
       def self.build_path
         platform = Actions.lane_context[Actions::SharedValues::PLATFORM_NAME]
         ipa_path = Actions.lane_context[SharedValues::IPA_OUTPUT_PATH]
         aab_path = Actions.lane_context[Actions::SharedValues::GRADLE_AAB_OUTPUT_PATH]
         apk_path = Actions.lane_context[Actions::SharedValues::GRADLE_APK_OUTPUT_PATH]
 
-        if platform == :ios
-          return ipa_path
-        elsif :android and !aab_path.nil?
-          return aab_path
-        else
-          return apk_path
-        end
+        return ipa_path if platform == :ios
+        return aab_path unless aab_path.nil?
+        return apk_path unless apk_path.nil?
+        return ipa_path
       end
 
       def self.description
         "Upload new iOS or Android build to Applivery"
       end
 
+      def self.details
+        [
+          "Uploads an IPA, APK or AAB file to Applivery and attaches the information of the current build:",
+          "build number, git branch, commit, commit message, tag and repository URL.",
+          "By default it takes the build generated by `gym` or `gradle` in the same lane."
+        ].join(" ")
+      end
+
       def self.authors
-        ["Alejandro Jimenez", "Cesar Trigo"]
+        ["Applivery"]
       end
 
       def self.available_options
@@ -98,6 +130,7 @@ module Fastlane
             env_name: "APPLIVERY_APP_TOKEN",
             description: "Your application identifier",
             optional: false,
+            sensitive: true,
             type: String),
 
           FastlaneCore::ConfigItem.new(key: :name,
@@ -123,6 +156,7 @@ module Fastlane
             env_name: "APPLIVERY_BUILD_PATH",
             description: "Your build path",
             default_value: self.build_path,
+            default_value_dynamic: true,
             optional: true,
             type: String),
 
@@ -146,7 +180,7 @@ module Fastlane
             default_value: "New version uploaded!",
             optional: true,
             type: String),
-          
+
           FastlaneCore::ConfigItem.new(key: :filter,
             env_name: "APPLIVERY_FILTER",
             description: "List of groups that will be notified",
@@ -158,6 +192,16 @@ module Fastlane
             description: "Your private tenant name or base domain",
             optional: true,
             type: String),
+
+          FastlaneCore::ConfigItem.new(key: :timeout,
+            env_name: "APPLIVERY_TIMEOUT",
+            description: "Timeout in seconds for the upload request",
+            default_value: DEFAULT_TIMEOUT,
+            optional: true,
+            type: Integer,
+            verify_block: proc do |value|
+              UI.user_error!("`timeout` must be greater than 0") unless value.to_i.positive?
+            end)
         ]
       end
 
@@ -167,11 +211,13 @@ module Fastlane
         ]
       end
 
+      def self.return_value
+        "The id of the build created in Applivery"
+      end
+
       def self.is_supported?(platform)
-        # Adjust this if your plugin only works for a particular platform (iOS vs. Android, for example)
-        # See: https://github.com/fastlane/fastlane/blob/master/fastlane/docs/Platforms.md
-        
-        [:ios, :android].include?(platform)
+        # The action uploads any IPA, APK or AAB file, so it also works when the
+        # lane has no platform defined (for example with `fastlane run applivery`)
         true
       end
 
@@ -181,10 +227,24 @@ module Fastlane
 
       def self.example_code
         [
-          'applivery(app_token: "YOUR_APP_TOKEN")'
+          'applivery(app_token: "YOUR_APP_TOKEN")',
+          'applivery(
+            app_token: "YOUR_APP_TOKEN",
+            build_path: "./app/build/outputs/bundle/release/app-release.aab",
+            name: "RC 1.0",
+            changelog: "Bug fixing",
+            tags: "RC1, QA",
+            notify_collaborators: true,
+            notify_employees: false,
+            notify_message: "Enjoy the new version!",
+            filter: "group1,group2|group3"
+          )',
+          'applivery(
+            app_token: "YOUR_APP_TOKEN",
+            tenant: "mycompany"
+          )'
         ]
       end
-
     end
   end
 end

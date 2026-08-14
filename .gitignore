@@ -1,5 +1,7 @@
 *.gem
 Gemfile.lock
+.bundle/
+vendor/bundle/
 
 ## Documentation cache and generated files:
 /.yardoc/
@@ -8,3 +10,14 @@ Gemfile.lock
 /rdoc/
 fastlane/README.md
 fastlane/report.xml
+fastlane/test_output/
+
+## RSpec
+spec/examples.txt
+
+## End-to-end tests: real credentials and run logs
+e2e/config.env
+e2e/logs/
+
+## macOS
+.DS_Store

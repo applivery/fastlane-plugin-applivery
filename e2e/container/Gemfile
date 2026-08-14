@@ -1,0 +1,35 @@
+# Gemfile for the end-to-end containers. The versions under test come from the
+# environment (set as build arguments of e2e/Dockerfile) so a single image
+# definition serves every row of the matrix.
+source 'https://rubygems.org'
+
+fastlane_req = ENV['FASTLANE_REQ'].to_s.strip
+faraday_req = ENV['FARADAY_REQ'].to_s.strip
+
+gem 'fastlane', fastlane_req.empty? ? '>= 2.0' : fastlane_req
+
+# When empty, bundler resolves the newest faraday that fastlane accepts
+gem 'faraday', faraday_req unless faraday_req.empty?
+
+# Escape hatch for rows that need something extra, e.g. an old fastlane on a
+# ruby that dropped a default gem: EXTRA_GEMS="mutex_m,csv@~> 3.3"
+ENV['EXTRA_GEMS'].to_s.split(',').each do |entry|
+  name, requirement = entry.split('@', 2)
+  next if name.to_s.strip.empty?
+  if requirement.to_s.strip.empty?
+    gem name.strip
+  else
+    gem name.strip, requirement.strip
+  end
+end
+
+# The unit suite is also run inside every image, against that row's faraday
+group :test do
+  gem 'rspec', '~> 3.0'
+  gem 'webmock', '~> 3.0'
+end
+
+# fastlane discovers plugins by evaluating this Gemfile, so the plugin under
+# test has to be a dependency of it (same layout a real project has).
+plugins_path = File.join(File.dirname(__FILE__), 'fastlane', 'Pluginfile')
+eval_gemfile(plugins_path) if File.exist?(plugins_path)

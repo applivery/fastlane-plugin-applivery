@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test (Ruby ${{ matrix.ruby }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ['3.1', '3.2', '3.3', '3.4']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+
+      # Some specs create git repositories to check the information attached to
+      # the build, git needs an identity to commit.
+      - name: Configure git
+        run: |
+          git config --global user.email "ci@applivery.com"
+          git config --global user.name "Applivery CI"
+          git config --global init.defaultBranch main
+
+      - name: Run the tests
+        run: bundle exec rake spec
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+
+      - name: Check the code style
+        run: bundle exec rubocop
+
+      - name: Build the gem
+        run: gem build fastlane-plugin-applivery.gemspec

@@ -1,0 +1,16 @@
+# The e2e images need the plugin source, the gemspec, the unit specs (they are
+# also run inside every image) and e2e/container.
+.git
+.github
+fastlane/report.xml
+fastlane/README.md
+
+# Never let the credentials or the run logs into a build context
+e2e/config.env
+e2e/logs
+
+*.gem
+Gemfile.lock
+.bundle
+vendor
+.DS_Store

@@ -1,0 +1,2 @@
+# The plugin under test. /plugin is the repository, copied in by e2e/Dockerfile.
+gem 'fastlane-plugin-applivery', path: '/plugin'

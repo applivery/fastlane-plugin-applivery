@@ -1,0 +1,183 @@
+# Lanes used by the end-to-end scenarios (see e2e/container/scenarios.rb).
+#
+# Every lane that is expected to succeed ends with `e2e_check!`, which verifies
+# both the returned build id and the APPLIVERY_BUILD_ID shared value, and prints
+# the marker the runner greps to collect the created builds.
+#
+# Notifications are switched off everywhere on purpose: these uploads go to a
+# real app and the defaults would email its collaborators and employees.
+
+def e2e_row
+  ENV['E2E_ROW'].to_s.empty? ? "local" : ENV['E2E_ROW']
+end
+
+def e2e_name(scenario)
+  "e2e #{e2e_row} #{scenario} #{ENV['E2E_RUN_ID']}".strip
+end
+
+# Deliberately a fixed pair: every distinct string here becomes a tag in the
+# real app, so the row and the versions go in the name and the changelog instead.
+def e2e_tags(_scenario)
+  "e2e,e2e-matrix"
+end
+
+def e2e_changelog(scenario)
+  require 'faraday'
+  [
+    "End-to-end test: #{scenario}",
+    "row: #{e2e_row}",
+    "ruby: #{RUBY_VERSION}",
+    "fastlane: #{Fastlane::VERSION}",
+    "faraday: #{Faraday::VERSION}",
+    "run: #{ENV['E2E_RUN_ID']}"
+  ].join("\n")
+end
+
+def e2e_check!(build_id)
+  UI.user_error!("the applivery action returned no build id") if build_id.to_s.empty?
+  shared_value = lane_context[SharedValues::APPLIVERY_BUILD_ID]
+  unless shared_value == build_id
+    UI.user_error!("APPLIVERY_BUILD_ID #{shared_value.inspect} does not match the returned id #{build_id.inspect}")
+  end
+
+  # Collected by the runner and printed in the summary
+  UI.success("E2E_BUILD_ID=#{build_id}")
+end
+
+platform :android do
+  # Token and tenant come from APPLIVERY_APP_TOKEN / APPLIVERY_TENANT, only the
+  # build is passed. Used from a tagged repo, an untagged repo and a plain
+  # directory to check the git metadata in each case.
+  desc "Upload with the smallest configuration"
+  lane :minimal do
+    build_id = applivery(
+      build_path: ENV['E2E_BUILD_PATH'],
+      name: e2e_name("minimal"),
+      tags: e2e_tags("minimal"),
+      changelog: e2e_changelog("minimal"),
+      notify_collaborators: false,
+      notify_employees: false
+    )
+    e2e_check!(build_id)
+  end
+
+  desc "Upload exercising every option of the action"
+  lane :all_params do
+    build_id = applivery(
+      app_token: ENV['APPLIVERY_APP_TOKEN'],
+      tenant: ENV['APPLIVERY_TENANT'],
+      build_path: ENV['E2E_BUILD_PATH'],
+      name: e2e_name("all params"),
+      # Accents, emoji and newlines have to survive the multipart encoding
+      changelog: "#{e2e_changelog('all_params')}\n\nCambios: acentuación, emoji 🚀, \"quotes\" & <tags>",
+      tags: e2e_tags("all_params"),
+      notify_collaborators: false,
+      notify_employees: false,
+      notify_message: "End-to-end test, please ignore 🤖",
+      timeout: 900
+    )
+    e2e_check!(build_id)
+  end
+
+  desc "Upload with a group filter (needs the groups to exist in the tenant)"
+  lane :filter_groups do
+    build_id = applivery(
+      build_path: ENV['E2E_BUILD_PATH'],
+      name: e2e_name("filter"),
+      tags: e2e_tags("filter_groups"),
+      changelog: e2e_changelog("filter_groups"),
+      notify_collaborators: false,
+      notify_employees: false,
+      filter: ENV['E2E_FILTER_GROUPS'].to_s.empty? ? "group1,group2|group3" : ENV['E2E_FILTER_GROUPS']
+    )
+    e2e_check!(build_id)
+  end
+
+  desc "Upload taking the build from the lane context, as gradle would leave it"
+  lane :autodetect do
+    Actions.lane_context[SharedValues::GRADLE_APK_OUTPUT_PATH] = ENV['E2E_BUILD_PATH']
+
+    build_id = applivery(
+      name: e2e_name("autodetect"),
+      tags: e2e_tags("autodetect"),
+      changelog: e2e_changelog("autodetect"),
+      notify_collaborators: false,
+      notify_employees: false
+    )
+    e2e_check!(build_id)
+  end
+
+  ### Lanes that must fail ###
+
+  desc "Must fail: the token is not valid"
+  lane :bad_token do
+    applivery(
+      app_token: ENV['E2E_BAD_TOKEN'],
+      build_path: ENV['E2E_BUILD_PATH'],
+      notify_collaborators: false,
+      notify_employees: false
+    )
+  end
+
+  desc "Must fail: the token is empty"
+  lane :empty_token do
+    applivery(
+      app_token: "",
+      build_path: ENV['E2E_BUILD_PATH'],
+      notify_collaborators: false,
+      notify_employees: false
+    )
+  end
+
+  desc "Must fail before uploading: the build does not exist"
+  lane :missing_build do
+    applivery(
+      build_path: "/nope/missing.apk",
+      notify_collaborators: false,
+      notify_employees: false
+    )
+  end
+
+  desc "Must fail before uploading: there is no build to upload"
+  lane :no_build_path do
+    applivery(
+      notify_collaborators: false,
+      notify_employees: false
+    )
+  end
+
+  desc "Must fail while parsing the options: the timeout is not positive"
+  lane :timeout_zero do
+    applivery(
+      build_path: ENV['E2E_BUILD_PATH'],
+      timeout: 0,
+      notify_collaborators: false,
+      notify_employees: false
+    )
+  end
+
+  desc "Must fail with a timeout: one second is not enough for the build"
+  lane :timeout_tiny do
+    build_id = applivery(
+      build_path: ENV['E2E_BUILD_PATH'],
+      name: e2e_name("timeout"),
+      tags: e2e_tags("timeout_tiny"),
+      changelog: e2e_changelog("timeout_tiny"),
+      timeout: 1,
+      notify_collaborators: false,
+      notify_employees: false
+    )
+    # Only reached on a very fast connection, the runner reports it as a warning
+    e2e_check!(build_id)
+  end
+
+  desc "Must fail: the tenant does not resolve"
+  lane :bad_tenant do
+    applivery(
+      tenant: "upload-test.applivery-e2e.invalid",
+      build_path: ENV['E2E_BUILD_PATH'],
+      notify_collaborators: false,
+      notify_employees: false
+    )
+  end
+end

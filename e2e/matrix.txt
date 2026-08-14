@@ -1,0 +1,20 @@
+# Version matrix for the end-to-end tests. One row per image.
+#
+# name|ruby|fastlane_req|faraday_req|bundler_req|expect_faraday_major|suite|allow_fail
+#
+# Only real compatibility boundaries are listed. fastlane's ruby floor moved to
+# >= 2.7 in 2.232.0 and to >= 3.0 in 2.235.0, and 2.238.0 is the first release
+# on faraday 2 (older ones pin faraday ~> 1.0), so anything in between would
+# retest an identical combination.
+#
+# An empty faraday_req lets bundler resolve the newest faraday fastlane accepts.
+# The suite is `core` everywhere and `all` (core + full) in the newest row.
+# allow_fail=1 rows report WARN instead of failing the run (they depend on gems
+# that are no longer maintained for that ruby).
+
+latest|3.4|= 2.238.0|||2|all|0
+faraday2-min|3.0|= 2.238.0|~> 2.7.0|~> 2.4.22|2|core|0
+faraday1-last|3.0|= 2.237.0|~> 1.10|~> 2.4.22|1|core|0
+ruby27|2.7|= 2.234.0|~> 1.9.0|~> 2.4.22|1|core|0
+ruby26-oldest|2.6|~> 2.231.0|~> 1.10|~> 2.4.22|1|core|1
+ruby40|4.0|= 2.238.0|||2|core|0

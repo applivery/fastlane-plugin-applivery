@@ -28,7 +28,9 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'faraday', '>= 1.0', '< 3.0'
   spec.add_dependency 'faraday-multipart', '>= 1.0', '< 2.0'
 
-  spec.add_development_dependency 'bundler', '~> 2.0'
+  # bundler is deliberately not a development dependency: it is the tool running
+  # the install, and pinning it here only makes `bundle install` fail on machines
+  # whose bundler is older than the pin.
   spec.add_development_dependency 'fastlane', '~> 2.0'
   spec.add_development_dependency 'pry', '~> 0.14'
   spec.add_development_dependency 'rake', '~> 13.0'
